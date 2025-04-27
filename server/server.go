@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"bufio"
 	"fmt"
 	"log"
 	"text/template"
@@ -17,9 +19,40 @@ func home(c *gin.Context) {
 }
 
 
-func echo(c *gin.Context) {
-	
-	
+
+
+
+
+func sendMessage(conn *websocket.Conn, msgChan chan string, done chan struct{}) {
+
+	go func() {
+
+		// sends messages at it receives from the channel
+		for {
+
+			select {
+			case <-done:
+				return
+			case msg := <-msgChan:
+				// send the message
+				err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
+
+				if err != nil {
+					log.Printf("failed to send msg: %v", err)
+					return
+				}
+
+			}
+
+		}
+
+	}()
+
+}
+
+
+func sendEndpoint(c *gin.Context) {
+
 	w,r := c.Writer, c.Request
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -31,25 +64,50 @@ func echo(c *gin.Context) {
 
     defer conn.Close()
 
+
     for {
-    	// continuously read from connection
-    	msgType, message, err := conn.ReadMessage()
+
+    	// continuously read messages from connection
+    	_, message, err := conn.ReadMessage()
+
     	if err != nil {
     		log.Println("read:", err)
     		break
     	}
-    	log.Printf("recv:%s", message)
+    	log.Printf("recv: %v", string(message))
 
-    	// echo the message back to the client
-    	err = conn.WriteMessage(msgType, message)
-    	if err != nil {
-    		log.Println("write:", err)
-    		break
-    	}
     }
 
 
+    // infinite loop for user input
+	reader := bufio.NewReader(os.Stdin)
+	msgChan := make(chan string)
+
+	done := make(chan struct{}) //unbuffered channel; senders block until receivers can receive
+
+
+	for {
+
+		fmt.Print(">")
+
+		msg, err := reader.ReadString(byte('\n'))
+
+		if err != nil {
+			log.Print(err)
+			return
+		}
+
+		msgChan <- msg
+		
+	}
+
+
+	go sendMessage(conn, msgChan, done)
+
+
 }
+
+
 
 
 func main() {
@@ -60,7 +118,7 @@ func main() {
 	
 	// endpoints
 	r.GET("/", home)
-	r.GET("/echo", echo)
+	r.GET("/send", sendEndpoint)
 
 
 	log.Fatal(r.Run(":8080"))

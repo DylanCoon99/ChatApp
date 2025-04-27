@@ -3,12 +3,43 @@ package main
 import (
 	"os"
 	"log"
-	"time"
+	"fmt"
+	//"time"
+	"bufio"
 	"os/signal"
 	//"text/template"
 	//"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+
+func sendMessage(conn *websocket.Conn, msgChan chan string, done chan struct{}) {
+
+	go func() {
+
+		// sends messages at it receives from the channel
+		for {
+
+			select {
+			case <-done:
+				return
+			case msg := <-msgChan:
+				// send the message
+				err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
+
+				if err != nil {
+					log.Printf("failed to send msg: %v", err)
+					return
+				}
+
+			}
+
+		}
+
+	}()
+
+}
+
 
 
 func main() {
@@ -20,7 +51,7 @@ func main() {
 	signal.Notify(interrupt, os.Interrupt)
 
 	// conn, resp, err
-	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/echo", nil)
+	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/send", nil)
 
 	if err != nil {
 		log.Fatal(err)
@@ -28,11 +59,10 @@ func main() {
 
 	defer conn.Close()
 
-	done := make(chan struct{})
 
 	go func() {
 
-		defer close(done)
+		//defer close(done)
 
 		for {
 			_, message, err := conn.ReadMessage()
@@ -45,36 +75,28 @@ func main() {
 	}()
 
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+
+	// infinite loop for user input
+	reader := bufio.NewReader(os.Stdin)
+	msgChan := make(chan string)
+
+	done := make(chan struct{}) //unbuffered channel; senders block until receivers can receive
+
+	go sendMessage(conn, msgChan, done)
 
 	for {
 
-		select {
-		case <-done:
-			// if done can be read from --> return
-			return
-		case t := <-ticker.C:
-			err := conn.WriteMessage(websocket.TextMessage, []byte(t.String()))
-			if err != nil {
-				log.Println("write:", err)
-				return
-			}
-		case <-interrupt:
-			log.Println("interrupt")
+		fmt.Print(">")
 
-			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				log.Println("write close:", err)
-				return
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-			}
+		msg, err := reader.ReadString(byte('\n'))
+
+		if err != nil {
+			log.Print(err)
 			return
 		}
 
+		msgChan <- msg
+		
 	}
 
 }
