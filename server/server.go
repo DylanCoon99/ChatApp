@@ -6,9 +6,8 @@ import (
 )
 
 
-
 func main() {
 
-	fmt.Println("Hello, world!")
+	fmt.Println("This is the server speaking.")
 
 }
