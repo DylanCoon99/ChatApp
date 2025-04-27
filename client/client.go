@@ -70,7 +70,7 @@ func main() {
 				log.Println("read:", err)
 				return
 			}
-			log.Printf("recv: %s", message)
+			log.Printf("recv: %s\n>", message)
 		}
 	}()
 

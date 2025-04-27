@@ -65,18 +65,22 @@ func sendEndpoint(c *gin.Context) {
     defer conn.Close()
 
 
-    for {
+    go func() {
+
+    	for {
 
     	// continuously read messages from connection
-    	_, message, err := conn.ReadMessage()
+    	_, msg, err := conn.ReadMessage()
 
     	if err != nil {
     		log.Println("read:", err)
     		break
     	}
-    	log.Printf("recv: %v", string(message))
+    	log.Printf("recv: %v\n>", string(msg))
 
-    }
+
+    	}
+	}()
 
 
     // infinite loop for user input
@@ -85,6 +89,8 @@ func sendEndpoint(c *gin.Context) {
 
 	done := make(chan struct{}) //unbuffered channel; senders block until receivers can receive
 
+
+	go sendMessage(conn, msgChan, done)
 
 	for {
 
@@ -100,10 +106,6 @@ func sendEndpoint(c *gin.Context) {
 		msgChan <- msg
 		
 	}
-
-
-	go sendMessage(conn, msgChan, done)
-
 
 }
 
